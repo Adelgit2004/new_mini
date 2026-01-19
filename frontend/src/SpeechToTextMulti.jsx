@@ -4,58 +4,85 @@ function SpeechToTextMulti() {
   const [text, setText] = useState("");
   const [translated, setTranslated] = useState("");
   const [language, setLanguage] = useState("hi-IN");
-  const [listening, setListening] = useState(false);
-
+  const [status, setStatus] = useState("idle");
   const recognitionRef = useRef(null);
 
-  const startListening = () => {
+  const createRecognition = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       alert("Speech Recognition not supported in this browser");
-      return;
+      return null;
     }
 
-    // Stop previous session if running
+    const recognition = new SpeechRecognition();
+    recognition.lang = language;
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    return recognition;
+  };
+
+  const translateText = async (speechText) => {
+    try {
+      setStatus("translating");
+
+      const res = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+          speechText
+        )}&langpair=${language.slice(0, 2)}|en`
+      );
+
+      const data = await res.json();
+      setTranslated(data.responseData?.translatedText || "Translation failed");
+      setStatus("done");
+    } catch (err) {
+      console.error("Translation error:", err);
+      setTranslated("Translation error");
+      setStatus("error");
+    }
+  };
+
+  const startListening = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
 
-    const recognition = new SpeechRecognition();
+    const recognition = createRecognition();
+    if (!recognition) return;
+
     recognitionRef.current = recognition;
-
-    recognition.lang = language;
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    setListening(true);
     setText("");
     setTranslated("");
+    setStatus("listening");
 
-    recognition.onresult = async (event) => {
-      const speechText = event.results[0][0].transcript;
-      setText(speechText);
+    recognition.onresult = (event) => {
+      const speechText = event.results?.[0]?.[0]?.transcript;
 
-      try {
-        const res = await fetch(
-          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-            speechText
-          )}&langpair=${language.slice(0, 2)}|en`
-        );
-
-        const data = await res.json();
-        setTranslated(data.responseData.translatedText);
-      } catch (error) {
-        setTranslated("Translation failed");
+      if (!speechText) {
+        setStatus("error");
+        return;
       }
 
-      setListening(false);
+      setText(speechText);
+      translateText(speechText);
     };
 
-    recognition.onerror = () => {
-      setListening(false);
-      alert("Speech recognition error");
+    recognition.onerror = (event) => {
+      console.error("Speech error:", event.error);
+
+      // Retry once for common issues
+      if (event.error === "no-speech" || event.error === "network") {
+        setTimeout(() => recognition.start(), 800);
+      } else {
+        setStatus("error");
+      }
+    };
+
+    recognition.onend = () => {
+      if (status === "listening") setStatus("idle");
     };
 
     recognition.start();
@@ -73,10 +100,11 @@ function SpeechToTextMulti() {
 
       <br /><br />
 
-      <button onClick={startListening} disabled={listening}>
-        {listening ? "Listening..." : "🎙 Speak"}
+      <button onClick={startListening}>
+        {status === "listening" ? "🎧 Listening..." : "🎙 Speak"}
       </button>
 
+      <p><b>Status:</b> {status}</p>
       <p><b>Original:</b> {text}</p>
       <p><b>English:</b> {translated}</p>
     </div>
@@ -84,4 +112,3 @@ function SpeechToTextMulti() {
 }
 
 export default SpeechToTextMulti;
-
