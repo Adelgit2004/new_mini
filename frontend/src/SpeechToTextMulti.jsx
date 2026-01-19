@@ -5,7 +5,9 @@ function SpeechToTextMulti() {
   const [translated, setTranslated] = useState("");
   const [language, setLanguage] = useState("hi-IN");
   const [status, setStatus] = useState("idle");
+
   const recognitionRef = useRef(null);
+  const finalTextRef = useRef(""); // ✅ FIX: missing ref
 
   const createRecognition = () => {
     const SpeechRecognition =
@@ -18,9 +20,10 @@ function SpeechToTextMulti() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = language;
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;        // ✅ long speech
+    recognition.interimResults = true;     // ✅ pauses supported
     recognition.maxAlternatives = 1;
+
     return recognition;
   };
 
@@ -42,27 +45,48 @@ function SpeechToTextMulti() {
   };
 
   const startListening = () => {
-    if (recognitionRef.current) recognitionRef.current.stop();
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
 
     const recognition = createRecognition();
     if (!recognition) return;
 
     recognitionRef.current = recognition;
+    finalTextRef.current = "";
     setText("");
     setTranslated("");
     setStatus("listening");
 
     recognition.onresult = (event) => {
-      const speechText = event.results?.[0]?.[0]?.transcript;
-      if (!speechText) {
-        setStatus("error");
-        return;
+      let interim = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalTextRef.current += transcript + " ";
+        } else {
+          interim += transcript;
+        }
       }
-      setText(speechText);
-      translateText(speechText);
+
+      setText(finalTextRef.current + interim);
     };
 
-    recognition.onerror = () => setStatus("error");
+    recognition.onend = () => {
+      if (finalTextRef.current.trim()) {
+        setStatus("processing");
+        translateText(finalTextRef.current.trim());
+      } else {
+        setStatus("idle");
+      }
+    };
+
+    recognition.onerror = () => {
+      setStatus("error");
+    };
+
     recognition.start();
   };
 
@@ -102,6 +126,7 @@ function SpeechToTextMulti() {
     </div>
   );
 }
+
 
 const styles = {
   page: {
