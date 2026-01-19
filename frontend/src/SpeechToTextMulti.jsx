@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 
 function SpeechToTextMulti() {
   const [text, setText] = useState("");
   const [translated, setTranslated] = useState("");
   const [language, setLanguage] = useState("hi-IN");
+  const [listening, setListening] = useState(false);
+
+  const recognitionRef = useRef(null);
 
   const startListening = () => {
     const SpeechRecognition =
@@ -14,22 +17,45 @@ function SpeechToTextMulti() {
       return;
     }
 
+    // Stop previous session if running
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+
     const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
     recognition.lang = language;
+    recognition.continuous = false;
     recognition.interimResults = false;
+
+    setListening(true);
+    setText("");
+    setTranslated("");
 
     recognition.onresult = async (event) => {
       const speechText = event.results[0][0].transcript;
       setText(speechText);
 
-      const res = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-          speechText
-        )}&langpair=${language.slice(0, 2)}|en`
-      );
+      try {
+        const res = await fetch(
+          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+            speechText
+          )}&langpair=${language.slice(0, 2)}|en`
+        );
 
-      const data = await res.json();
-      setTranslated(data.responseData.translatedText);
+        const data = await res.json();
+        setTranslated(data.responseData.translatedText);
+      } catch (error) {
+        setTranslated("Translation failed");
+      }
+
+      setListening(false);
+    };
+
+    recognition.onerror = () => {
+      setListening(false);
+      alert("Speech recognition error");
     };
 
     recognition.start();
@@ -47,7 +73,9 @@ function SpeechToTextMulti() {
 
       <br /><br />
 
-      <button onClick={startListening}>🎙 Speak</button>
+      <button onClick={startListening} disabled={listening}>
+        {listening ? "Listening..." : "🎙 Speak"}
+      </button>
 
       <p><b>Original:</b> {text}</p>
       <p><b>English:</b> {translated}</p>
@@ -56,3 +84,4 @@ function SpeechToTextMulti() {
 }
 
 export default SpeechToTextMulti;
+
