@@ -3,6 +3,7 @@ import path from "path";
 import OpenAI from "openai";
 
 const app = express();
+const __dirname = new URL('.', import.meta.url).pathname;
 
 // Serve React frontend build folder
 app.use(express.static(path.join(__dirname, "../frontend/build")));
