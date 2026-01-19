@@ -1,32 +1,22 @@
 import express from "express";
-import multer from "multer";
-import fs from "fs";
+import path from "path";
 import OpenAI from "openai";
 
 const app = express();
-app.use(express.json());
 
-const upload = multer({ dest: "uploads/" });
+// Serve React frontend build folder
+app.use(express.static(path.join(__dirname, "../frontend/build")));
 
-// ✅ This is where you initialize OpenAI with the env variable
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+// Your API route
+app.post("/transcribe", async (req, res) => {
+  // OpenAI Whisper code here
+  res.json({ text: "Hello from backend!" });
 });
 
-app.post("/transcribe", upload.single("audio"), async (req, res) => {
-  try {
-    const response = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(req.file.path),
-      model: "whisper-1"
-    });
-
-    fs.unlinkSync(req.file.path); // cleanup
-
-    res.json({ text: response.text });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// For all other routes, serve index.html
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Backend running"));
+app.listen(PORT, () => console.log("Server running on port", PORT));
